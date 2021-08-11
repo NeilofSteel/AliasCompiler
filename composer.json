@@ -1,0 +1,19 @@
+{
+    "name": "neilofsteel/aliascompiler",
+    "description": "description",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Neil",
+            "email": "neil.privatemail@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "AliasCompiler\\": "src/"
+        }
+    }
+}
