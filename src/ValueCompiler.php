@@ -4,11 +4,22 @@ namespace AliasCompiler;
 class ValueCompiler extends Singleton
 {
 
+    private static $instance = null;
+
+    public static function getInstance()
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+
+        return self::$instance;
+    }
+
+    protected function __clone(){}
+
     protected $compilers = [];
 
     protected function __construct(){
-        parent::__construct();
-
         $this->add(
             'json',
             function($value){

@@ -1,14 +1,27 @@
 <?php
 namespace AliasCompiler;
 
-class Compiler extends Singleton
+class Compiler
 {
+
+    private static $instance = null;
+
+    public static function getInstance()
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+
+        return self::$instance;
+    }
+
+    protected function __clone(){}
+
+
 
     protected $valueCompiler;
 
     protected function __construct(){
-        parent::__construct();
-
         $this->valueCompiler = ValueCompiler::getInstance();
     }
 
