@@ -1,8 +1,20 @@
 <?php
 namespace AliasCompiler;
 
-class Compiler
+class Compiler extends Singleton
 {
+
+    protected $valueCompiler;
+
+    protected function __construct(){
+        parent::__construct();
+
+        $this->valueCompiler = ValueCompiler::getInstance();
+    }
+
+    public function getValueCompiler(){
+        return $this->valueCompiler;
+    }
 
     public function compile($response, $main_primary_key = 'id', $primary_keys = []){
         $compiled = [];
@@ -61,17 +73,7 @@ class Compiler
             if(strpos($key, '->') !== false) $key = str_replace('->', '>', $key);
             [$method, $key] = explode('>', $key);
 
-            if($method === 'json'){
-                $value = json_decode($value);
-            } else if($method === 'serialized'){
-                $value = unserialize($value);
-            } else if($method === 'date'){
-                $value = date("d.m.Y H:i", strtotime($value));
-            } else if($method === 'decimal'){
-                $value = $value/100;
-            } else if($method === 'notempty'){
-                $value = (!empty($value));
-            }
+            $value = $this->getValueCompiler()->compile($method, $value);
         }
         return [$key, $value];
     }
