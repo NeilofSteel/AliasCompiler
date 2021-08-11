@@ -1,6 +1,7 @@
 {
     "name": "neilofsteel/aliascompiler",
-    "description": "description",
+    "description": "Compile array of keys to nested objects",
+    "version": "0.1",
     "license": "MIT",
     "authors": [
         {
