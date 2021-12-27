@@ -1,7 +1,7 @@
 <?php
 namespace AliasCompiler;
 
-class ValueCompiler extends Singleton
+class ValueCompiler
 {
 
     private static $instance = null;
