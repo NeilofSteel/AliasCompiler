@@ -46,8 +46,12 @@ class Compiler
 
                 if(PhpFunctions::str_starts_with($key, '!')){
                     continue;
-                } else if(PhpFunctions::str_starts_with($key, '?') && is_null($value)){
-                    continue;
+                } else if(PhpFunctions::str_starts_with($key, '?')){
+                    if(is_null($value)){
+                        continue;
+                    } else {
+                        $key = substr($key, 1);
+                    }
                 }
 
                 $item = (!empty($compiled[$item_id]))? $compiled[$item_id] : [];
@@ -79,6 +83,9 @@ class Compiler
 
         if(PhpFunctions::str_starts_with($key, '[]')){
             $key = substr($key, 2);
+            if(!isset($item[$key])) {
+                $item[$key] = [];
+            }
 
             $primary_key = $this->getPrimaryKeyAlias($keys, $offset, $primary_keys);
             if($primary_key){
