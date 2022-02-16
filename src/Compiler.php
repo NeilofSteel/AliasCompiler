@@ -81,10 +81,11 @@ class Compiler
         $key = $keys[$offset];
         $next_key = ($offset+1 < count($keys))? $keys[$offset+1] : null;
 
-        if(PhpFunctions::str_starts_with($key, '[]')){
+        if(PhpFunctions::str_starts_with($key, '[]') || PhpFunctions::str_starts_with($key, '{}')){
+            $asObject = PhpFunctions::str_starts_with($key, '{}');
             $key = substr($key, 2);
             if(!isset($item[$key])) {
-                $item[$key] = [];
+                $item[$key] = ($asObject)? (object)[] : [];
             }
 
             $primary_key = $this->getPrimaryKeyAlias($keys, $offset, $primary_keys);
@@ -92,8 +93,14 @@ class Compiler
                 if(array_key_exists($primary_key, $row)){
                     $primary_key_value = $row[$primary_key];
                     if($primary_key_value){
-                        $new_item = (empty($item[$key][$primary_key_value]))? [] : $item[$key][$primary_key_value];
-                        $item[$key][$primary_key_value] = $this->setValueToNestedKeys($new_item, $row, $raw_key, $value, $primary_keys, $offset+1);
+                        if($asObject){
+                            $new_item = (empty($item[$key][$primary_key_value]))? [] : $item[$key][$primary_key_value];
+                            $item[$key][$primary_key_value] = $this->setValueToNestedKeys($new_item, $row, $raw_key, $value, $primary_keys, $offset+1);
+                        } else {
+                            $index = array_search($primary_key_value, array_column($item[$key], $primary_key)) ?? count($item[$key]);
+                            $new_item = (isset($item[$key][$index]))? $item[$key][$index] : [];
+                            $item[$key][$index] = $this->setValueToNestedKeys($new_item, $row, $raw_key, $value, $primary_keys, $offset+1);
+                        }
                     }
                 } else {
                     //throw new \Exception("No id for $raw_key found.");
