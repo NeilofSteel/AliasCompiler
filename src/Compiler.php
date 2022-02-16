@@ -1,12 +1,14 @@
 <?php
 namespace AliasCompiler;
 
+use AliasCompiler\Helper\PhpFunctions;
+
 class Compiler
 {
 
     private static $instance = null;
 
-    public static function getInstance()
+    public static function getInstance(): Compiler
     {
         if (static::$instance === null) {
             static::$instance = new static();
@@ -33,61 +35,32 @@ class Compiler
         return $this->valueCompiler;
     }
 
-    public function compile($response, $main_primary_key = 'id', $primary_keys = []){
+    public function compile($response, $primary_keys = []){
         $compiled = [];
-        $joined_data = [];
 
         foreach($response as $i => $row) {
-            $item_id = $row->{$main_primary_key};
+            if(is_object($row)) $row = (array)$row;
+
+            $item_id = $row[$primary_keys['root'] ?? 'id'];
             foreach($row as $key => $value){
-                if(strpos($key, '$') !== false){
 
-                    [$object_key, $key] = $this->explodeFirst('$', $key);
-
-                    // Given foreign key | default: id
-                    $join_pk = (!empty($primary_keys[$object_key]))? $primary_keys[$object_key] : 'id';
-                    $join_item_id = $row->{"{$object_key}\${$join_pk}"};
-
-                    if(empty($join_item_id)) continue;
-                    //[$compiled_key, $value] = $this->compileJoinedObjectKeyAndValue($compiled_key, $value);
-                    $item = (!empty($joined_data[$item_id][$object_key][$join_item_id]))? $joined_data[$item_id][$object_key][$join_item_id] : [];
-                    $joined_data[$item_id][$object_key][$join_item_id] = $this->addCompiledKeyAndValueToItem($item, $key, $value);
-                    //$joined_data[$item_id][$array_key][$join_item_id][$compiled_key] = $value;
-
-                } else {
-
-                    $item = (!empty($compiled[$item_id]))? $compiled[$item_id] : [];
-                    $compiled[$item_id] = $this->addCompiledKeyAndValueToItem($item, $key, $value);
-
+                if(PhpFunctions::str_starts_with($key, '!')){
+                    continue;
+                } else if(PhpFunctions::str_starts_with($key, '?') && is_null($value)){
+                    continue;
                 }
-            }
-        }
 
-        foreach($compiled as $id => $item){
-            if(!empty($joined_data[$id])){
-                foreach($joined_data[$id] as $joined_item_key => $joined_items){
-                    foreach($joined_items as $joined_item_id => $joined_item_data){
+                $item = (!empty($compiled[$item_id]))? $compiled[$item_id] : [];
+                $compiled[$item_id] = $this->addCompiledKeyAndValueToItem($item, $row, $key, $value, $primary_keys);
 
-                        $compiled[$id][$joined_item_key][] = $joined_item_data;
-
-                    }
-                }
             }
         }
 
         return array_values($compiled);
     }
 
-    private function explodeFirst($separator, $string){
-        $arr = explode($separator, $string);
-        $first = $arr[0];
-        array_splice($arr, 0, 1);
-        return [$first, implode($separator, $arr)];
-    }
-
-    private function compileKeyAndValue($key, $value){
-        if(strpos($key, '->') !== false || strpos($key, '>') !== false){
-            if(strpos($key, '->') !== false) $key = str_replace('->', '>', $key);
+    protected function compileKeyAndValue($key, $value){
+        if(PhpFunctions::str_contains($key, '>')){
             [$method, $key] = explode('>', $key);
 
             $value = $this->getValueCompiler()->compile($method, $value);
@@ -95,22 +68,49 @@ class Compiler
         return [$key, $value];
     }
 
-    private function addCompiledKeyAndValueToItem($item, $key, $value){
-        return $this->setValueToNestedKeys($item, explode('@', $key), $value);
+    protected function addCompiledKeyAndValueToItem($item, $row, $key, $value, $primary_keys){
+        return $this->setValueToNestedKeys($item, $row, $key, $value, $primary_keys);
     }
 
-    private function setValueToNestedKeys($item, $keys, $value, $offset = 0){
+    protected function setValueToNestedKeys($item, $row, $raw_key, $value, $primary_keys, $offset = 0){
+        $keys = explode('@', $raw_key);
         $key = $keys[$offset];
-        $key_count = count($keys);
-        $next_key = (($offset+1) < $key_count)? $keys[$offset+1] : null;
-        if(!empty($next_key)){
-            $new_item = (empty($item[$key]))? [] : $item[$key];
-            $item[$key] = $this->setValueToNestedKeys($new_item, $keys, $value, $offset+1);
+        $next_key = ($offset+1 < count($keys))? $keys[$offset+1] : null;
+
+        if(PhpFunctions::str_starts_with($key, '[]')){
+            $key = substr($key, 2);
+
+            $primary_key = $this->getPrimaryKeyAlias($keys, $offset, $primary_keys);
+            if($primary_key){
+                if(array_key_exists($primary_key, $row)){
+                    $primary_key_value = $row[$primary_key];
+                    if($primary_key_value){
+                        $new_item = (empty($item[$key][$primary_key_value]))? [] : $item[$key][$primary_key_value];
+                        $item[$key][$primary_key_value] = $this->setValueToNestedKeys($new_item, $row, $raw_key, $value, $primary_keys, $offset+1);
+                    }
+                } else {
+                    //throw new \Exception("No id for $raw_key found.");
+                }
+            } else {
+                //throw new \Exception("Invalid multidimensional setting for $raw_key.");
+            }
         } else {
-            [$compiled_key, $value] = $this->compileKeyAndValue($key, $value);
-            $item[$compiled_key] = $value;
+            if(!is_null($next_key)){
+                $new_item = (empty($item[$key]))? [] : $item[$key];
+                $item[$key] = $this->setValueToNestedKeys($new_item, $row, $raw_key, $value, $primary_keys, $offset+1);
+            } else {
+                [$compiled_key, $value] = $this->compileKeyAndValue($key, $value);
+                $item[$compiled_key] = $value;
+            }
         }
         return $item;
+    }
+
+    protected function getPrimaryKeyAlias($keys, $key_index, $primary_keys){
+        $keys = array_slice($keys, 0, $key_index+1);
+        $array_key = implode('@', $keys);
+        $primary_key = (!empty($primary_keys[$array_key]))? $primary_keys[$array_key] : 'id';
+        return "$array_key@$primary_key";
     }
 
 }
